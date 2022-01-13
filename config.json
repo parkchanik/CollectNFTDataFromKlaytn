@@ -1,7 +1,0 @@
-{
-    "AccessKeyID" : "KASKRBBYWZ90A4R2PALA3IQ2" , 
-    "SecretAccessKey" : "I-U8rm51Bv5wYvYkW_9jto8P4KIzne3ATbJVslx1",
-    "Endpoint" : "https://node-api.klaytnapi.com/v1/klaytn" ,
-    "Network" : "cypress"
-}
-
