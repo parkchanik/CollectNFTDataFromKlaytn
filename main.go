@@ -1,174 +1,88 @@
 package main
 
 import (
-	//"context"
-
-	"encoding/json"
+	"context"
+	"flag"
 	"fmt"
+	"log"
+	"math/big"
 
-	//"errors"
-	"io/ioutil"
-	//"math/big"
+	"runtime"
+	"time"
 
-	//"strconv"
-
-	"bytes"
-
-	//"time"
-	//"strconv"
-	//"encoding/json"
-
-	//"io"
-	//"log"
-	//"os"
-
-	//"math"
-	//"encoding/hex"
-
-	//"strings"
-
-	klaytntypes "github.com/klaytn/klaytn/blockchain/types"
-
-	logger "KalytnProj/logger"
-
-	"net/http"
+	"CollectNFTDataKlaytn/config"
+	"CollectNFTDataKlaytn/kas"
+	klayClient "github.com/klaytn/klaytn/client"
 )
 
-type ErrorType uint8
+var klaytndial *klayClient.Client = nil
 
-const (
-	Ok                  ErrorType = 200 // GET, POST Only
-	Created                       = 201 // POST Only
-	Accepted                      = 202 // PUT, DELETE Only
-	BadRequest                    = 400 // GET Only
-	Unauthorized                  = 401
-	NotFound                      = 404
-	MethodNotAllowed              = 405
-	InternalServerError           = 500
-	ServiceUnavailable            = 503
-)
-
-type JsonRequestStruct struct {
-	JsonRPC string        `json:"jsonrpc"`
-	Method  string        `json:"method"`
-	Params  []interface{} `json:"params"`
-	ID      int           `json:"id"`
-}
-
-type JsonResponsetStruct struct {
-	JsonRPC string             `json:"jsonrpc"`
-	ID      int                `json:"id"`
-	Result  klaytntypes.Header `json:"result"`
-}
+var IMAGE_PATH string = "../CollectNFT/KlaytnImages/"
 
 func main() {
 
-	logger.LoggerInit()
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	dataStruct := JsonRequestStruct{}
+	fmt.Println("GOMAXPROCS : ", runtime.GOMAXPROCS(0))
 
-	// JsonRPC: "2.0",
-	// 	Method:  "klay_getBlockByNumber",
-	// 	Params:  []interface{"0x1b4" , true},
-	// 	ID:      1,
-	dataStruct.JsonRPC = "2.0"
-	dataStruct.Method = "klay_getBlockByNumber"
+	fromNum := flag.Int64("fromblock", 0, "FromBlockNumber")
+	toNum := flag.Int64("toblock", 0, "ToBlockNumber")
 
-	//dataStruct.Method = "klay_blockNumber"
+	flag.Parse()
 
-	dataStruct.Params = make([]interface{}, 0)
-	dataStruct.Params = append(dataStruct.Params, "0x4c0c248", true)
-
-	dataStruct.ID = 1
-
-	url := "https://node-api.klaytnapi.com/v1/klaytn"
-	pbytes, _ := json.Marshal(dataStruct)
-	buff := bytes.NewBuffer(pbytes)
-
-	req, err := http.NewRequest("POST", url, buff)
+	configData, err := config.LoadConfigration("config.json")
 	if err != nil {
-		logger.ErrorLog("Http Post : fail NewRequest err : %s", err.Error())
-
+		log.Fatal("LoadConfigration :", err)
 	}
-	//KASKRBBYWZ90A4R2PALA3IQ2
-	//Content-Type 헤더 추가
-	req.Header.Add("Authorization", "Basic S0FTS1JCQllXWjkwQTRSMlBBTEEzSVEyOkktVThybTUxQnY1d1l2WWtXXzlqdG84UDRLSXpuZTNBVGJKVnNseDE=")
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("x-chain-id", "8217")
 
-	res, err := http.DefaultClient.Do(req)
+	ksconfig := kas.Config{}
+
+	ksconfig.AccessKeyID = configData.AccessKeyID
+	ksconfig.SecretAccessKey = configData.SecretAccessKey
+	ksconfig.Endpoint = configData.Endpoint
+	ksconfig.Network = configData.Network
+
+	k, err := kas.Dial(ksconfig)
 	if err != nil {
-		logger.ErrorLog("Http Post : fail DefaultClient DO() err : %s", err.Error())
-		return
-
+		log.Fatal("Dial : ", err)
 	}
 
-	defer res.Body.Close()
+	klaytndial = k
 
-	statuscode := ErrorType(res.StatusCode)
-
-	// Response 체크.
-	if statuscode.IsSuccess() == false {
-		logger.ErrorLog("Http Post : statuscode [%d]", res.StatusCode)
-		return
-	}
-
-	respBody, err := ioutil.ReadAll(res.Body)
+	chainId, err := klaytndial.ChainID(context.Background())
 	if err != nil {
-		logger.ErrorLog("Http Post : Fail ReadAll err :  [%s]", err.Error())
+		log.Fatal("ChainID error : ", err)
+	}
+	fmt.Println("ChainID : ", chainId.Int64())
 
+	// block number 13717846 (Nov-30-2021 11:59:50 PM +UTC)
+	// block number 13527859 (Nov-01-2021 12:00:07 AM +UTC)
+	// block number 13527858 (Oct-31-2021 11:59:20 PM +UTC)
+	// block number 13330090 (Oct-01-2021 12:00:00 AM +UTC)
+	// block number 13330089 (Sep-30-2021 11:59:56 PM +UTC)
+
+	var fromBlockNumber int64 = 13340710 //13717846
+	var toBlockNumber int64 = 13340710
+
+	if *fromNum != 0 {
+		fromBlockNumber = *fromNum
+		toBlockNumber = *toNum
 	}
 
-	responseData := JsonResponsetStruct{}
+	i := fromBlockNumber
 
-	err = json.Unmarshal(respBody, &responseData)
-	if err != nil {
-		fmt.Println("err responseData :", err)
+	for i <= toBlockNumber {
+
+		blockNum := big.NewInt(i)
+
+		block, err := klaytndial.BlockByNumber(context.Background(), blockNum)
+		if err != nil {
+			log.Fatal("BlockByNumber : ", err)
+		}
+
+		blocktime := block.Time().Int64()
+		blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+		fmt.Printf("blockdata time : %s\n", blocktimestring)
+		i = i + 1
 	}
-
-	fmt.Println("respBody responseData.Result.Number : ", responseData.Result)
-
-}
-
-func HttpPost(url string, object interface{}) ([]byte, bool) {
-	pbytes, _ := json.Marshal(object)
-	buff := bytes.NewBuffer(pbytes)
-
-	req, err := http.NewRequest("POST", url, buff)
-	if err != nil {
-		//logger.ServerLogError("Http Post : fail NewRequest")
-		return nil, false
-	}
-
-	//Content-Type 헤더 추가
-	req.Header.Add("Content-Type", "application/json")
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		//logger.ServerLogError("Http Post : fail DefaultClient DO()")
-		return nil, false
-	}
-
-	statuscode := ErrorType(res.StatusCode)
-
-	defer res.Body.Close()
-
-	// Response 체크.
-	if statuscode.IsSuccess() == false {
-		//logger.ServerLogError("Http Post : statuscode [%d]", res.StatusCode)
-		return nil, false
-
-	}
-
-	respBody, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		//logger.ServerLogError("Http Post : Fail ReadAll [%v]", err.Error())
-		return nil, false
-	}
-	return respBody, true
-}
-
-func (errType ErrorType) IsSuccess() bool {
-	return (errType == Created || errType == Accepted || errType == Ok)
-	//return int(errType) < 400
 }
