@@ -13,17 +13,21 @@ import (
 	"CollectNFTDataKlaytn/config"
 	"CollectNFTDataKlaytn/kas"
 	klayClient "github.com/klaytn/klaytn/client"
+
+	logger "CollectNFTDataKlaytn/logger"
 )
 
 var klaytndial *klayClient.Client = nil
 
-var IMAGE_PATH string = "../CollectNFT/KlaytnImages/"
+var IMAGE_PATH string = "../CollectNFT/ImagesKlaytn/"
 
 func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	fmt.Println("GOMAXPROCS : ", runtime.GOMAXPROCS(0))
+
+	logger.LoggerInit()
 
 	fromNum := flag.Int64("fromblock", 0, "FromBlockNumber")
 	toNum := flag.Int64("toblock", 0, "ToBlockNumber")
@@ -55,23 +59,34 @@ func main() {
 	}
 	fmt.Println("ChainID : ", chainId.Int64())
 
-	// block number 13717846 (Nov-30-2021 11:59:50 PM +UTC)
-	// block number 13527859 (Nov-01-2021 12:00:07 AM +UTC)
-	// block number 13527858 (Oct-31-2021 11:59:20 PM +UTC)
-	// block number 13330090 (Oct-01-2021 12:00:00 AM +UTC)
-	// block number 13330089 (Sep-30-2021 11:59:56 PM +UTC)
+	// klaytn block list
+	// klaytn lastest block num 80292389
 
-	var fromBlockNumber int64 = 13340710 //13717846
-	var toBlockNumber int64 = 13340710
+	// block number 73967410 (Nov 01, 2021 00:00:00 / UTC+9)
+	// block number 73967409 (Oct 31, 2021 23:59:59 / UTC+9)
+	// block number 71291139 (Oct 01, 2021 00:00:00 / UTC+9)
+	// block number 71291138 (Sep 30, 2021 23:59:59 / UTC+9)
+
+	var fromBlockNumber int64 = 71291139 //13717846
+	var toBlockNumber int64 = 71291139
 
 	if *fromNum != 0 {
 		fromBlockNumber = *fromNum
 		toBlockNumber = *toNum
 	}
 
+	latestBlockNum, err := klaytndial.BlockNumber(context.Background())
+	if err != nil {
+		log.Fatal("BlockNumber : ", err)
+	}
+
+	logger.InfoLog("----- latestBlock Num :  %d , Time : %s", latestBlockNum.Int64(), time.Now())
+
 	i := fromBlockNumber
 
 	for i <= toBlockNumber {
+
+		logger.InfoLog("----- Block Num :  %d , Time : %s", i, time.Now())
 
 		blockNum := big.NewInt(i)
 
