@@ -12,6 +12,7 @@ import (
 
 	"CollectNFTDataKlaytn/config"
 	"CollectNFTDataKlaytn/kas"
+	"CollectNFTDataKlaytn/parse"
 	klayClient "github.com/klaytn/klaytn/client"
 
 	logger "CollectNFTDataKlaytn/logger"
@@ -67,20 +68,13 @@ func main() {
 	// block number 71291139 (Oct 01, 2021 00:00:00 / UTC+9)
 	// block number 71291138 (Sep 30, 2021 23:59:59 / UTC+9)
 
-	var fromBlockNumber int64 = 71291139 //13717846
-	var toBlockNumber int64 = 71291139
+	var fromBlockNumber int64 = 80520318 //13717846
+	var toBlockNumber int64 = 80520318
 
 	if *fromNum != 0 {
 		fromBlockNumber = *fromNum
 		toBlockNumber = *toNum
 	}
-
-	latestBlockNum, err := klaytndial.BlockNumber(context.Background())
-	if err != nil {
-		log.Fatal("BlockNumber : ", err)
-	}
-
-	logger.InfoLog("----- latestBlock Num :  %d , Time : %s", latestBlockNum.Int64(), time.Now())
 
 	i := fromBlockNumber
 
@@ -98,6 +92,38 @@ func main() {
 		blocktime := block.Time().Int64()
 		blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
 		fmt.Printf("blockdata time : %s\n", blocktimestring)
+
+		for _, txs := range block.Transactions() {
+
+			//etherint64 := txs.Value().Int64()
+
+			// if etherint64 < minETHValue {
+			// 	continue
+			// }
+
+			txhash := txs.Hash()
+
+			if txhash.Hex() != "0x5cf031ef3e2422b936323fd71772452adbbad540358081b2b636dce6f5e118f0" {
+				continue
+			}
+
+			logger.InfoLog("------ start parse Transaction TxHash[%s]\n", txhash.Hex())
+
+			// 해당 트랜잭션의 영수증
+			rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
+			if err != nil {
+				logger.InfoLog("--ransactionReceipt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
+				continue
+			}
+
+			if len(rept.Logs) == 0 { //event log 가없으면 일반 거래일것이다
+				continue
+			}
+
+			parse.ParseReceipt(rept)
+
+		}
+
 		i = i + 1
 	}
 }
