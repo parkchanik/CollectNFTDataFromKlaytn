@@ -127,3 +127,15 @@ func main() {
 		i = i + 1
 	}
 }
+
+// WKLAY CONTRACT ADDRESS
+//https://scope.klaytn.com/account/0xfd844c2fca5e595004b17615f891620d1cb9bbb2?tabId=txList
+
+//KLAYTN 거래 예제
+//https://scope.klaytn.com/tx/0x8386fa5a13e4ec15347e46bce5f7ed446c3ecf934205eada121252dab15c901c?tabId=eventLog
+//https://scope.klaytn.com/tx/0x6cea865be1d1c0b0ae584ffcbbae11475f6d936652391225e80f811effeb774f?tabId=eventLog
+//https://scope.klaytn.com/tx/0x1a59f3ee5de6a5581f858994c73715627f1e06b24959ae8798acfb37ed58d5ca?tabId=eventLog
+
+//KLAY 치킨
+//https://opensea.io/assets/klaytn/0x6b8f71aa8d5817d94056103886a1f07d12e78ce5/6142
+//https://scope.klaytn.com/tx/0xe59be99f7540f24c0ef932a7f52ca718287023e3060a1c15b52bb20b68f802a7?tabId=eventLog
