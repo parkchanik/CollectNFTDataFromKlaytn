@@ -1,6 +1,9 @@
 solc --abi Store.sol
 solc --bin Store.sol
-..\abigen --bin=output/ERC721/ERC721.bin --abi=output/ERC721/ERC721.abi --pkg=erc721 --out=output/ERC721/ERC721.go
 
-..\abigen --bin=output/ERC1155/ERC1155.bin --abi=output/ERC1155/ERC1155.abi --pkg=erc1155 --out=output/ERC1155/ERC1155.go
+..\abigen --bin=build/KIP7/KIP7.bin --abi=build/KIP7/KIP7.abi --pkg=kip7 --out=KIP7/KIP7.go
+
+..\abigen --bin=build/KIP17/KIP17.bin --abi=build/KIP17/KIP17.abi --pkg=kip17 --out=KIP17/KIP17.go
+
+..\abigen --bin=build/KIP37/KIP37.bin --abi=build/KIP37/KIP37.abi --pkg=kip37 --out=KIP37/KIP37.go
  
