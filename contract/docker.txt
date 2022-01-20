@@ -20,5 +20,13 @@ docker run -v D:/WorkSpace/20.blockchain/klaytn_contracts/klaytn-contracts/contr
 
 docker run -v D:/WorkSpace/20.blockchain/klaytn_contracts/klaytn-contracts/contracts:/sources -v D:/WorkSpace/20.blockchain/CollectNFTDataFromKlaytn/contract:/output ethereum/solc:0.5.6 --allow-paths /sources --overwrite -o /output/build/KIP7 --abi --bin /sources/token/KIP7/KIP7.sol
 
+// KIP17FULL 을 해야한다 
+docker run -v F:/WorkSpacePrivate/klaytn-contracts-master/klaytn-contracts-master/contracts:/sources -v F:/WorkSpacePrivate/blockchain/CollectNFTDataFromKlaytn/contract:/output ethereum/solc:0.5.6 --allow-paths /sources --overwrite -o /output/build/KIP17 --abi --bin /sources/token/KIP17/KIP17Full.sol
+
+// KIP7 FULL
+docker run -v F:/WorkSpacePrivate/klaytn-contracts-master/klaytn-contracts-master/contracts:/sources -v F:/WorkSpacePrivate/blockchain/CollectNFTDataFromKlaytn/contract:/output ethereum/solc:0.5.6 --allow-paths /sources --overwrite -o /output/build/KIP7 --abi --bin /sources/token/KIP7/KIP7TokenFull.sol
+
+// KIP37 FULL
+docker run -v F:/WorkSpacePrivate/klaytn-contracts-master/klaytn-contracts-master/contracts:/sources -v F:/WorkSpacePrivate/blockchain/CollectNFTDataFromKlaytn/contract:/output ethereum/solc:0.5.6 --allow-paths /sources --overwrite -o /output/build/KIP37 --abi --bin /sources/token/KIP37/KIP37Token.sol
 
 docker run -v D:/WorkSpace/20.blockchain/klaytn_contracts/klaytn-contracts/contracts:/sources -v D:/WorkSpace/20.blockchain/CollectNFTDataFromKlaytn/contract:/output ethereum/solc:0.5.6 --allow-paths /sources --overwrite -o /output/build/KIP37 --abi --bin /sources/token/KIP37/KIP37.sol
