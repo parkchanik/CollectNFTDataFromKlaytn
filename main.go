@@ -138,20 +138,21 @@ func main() {
 					return
 				}
 
-				Name, err := instance.Name(&bind.CallOpts{})
-				if err != nil {
-					logger.InfoLog("GetDataERC721 instance.Name error[%s] ", err.Error())
-
-				}
-
-				Symbol, err := instance.Symbol(&bind.CallOpts{})
-				if err != nil {
-					logger.InfoLog("GetDataERC721 instance.Symbol error[%s] ", err.Error())
-
-					logger.InfoLog("------- NewKip17 contractAddressHex[%s] , Name[%s] , Symbol[%s] error[%s] ", m.Address.Hex(), Name, Symbol, err.Error())
-				}
-
 				if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" {
+
+					Name, err := instance.Name(&bind.CallOpts{})
+					if err != nil {
+						logger.InfoLog("GetDataERC721 instance.Name error[%s] ", err.Error())
+
+					}
+
+					Symbol, err := instance.Symbol(&bind.CallOpts{})
+					if err != nil {
+						logger.InfoLog("GetDataERC721 instance.Symbol error[%s] ", err.Error())
+
+					}
+
+					logger.InfoLog("------- NewKip17 contractAddressHex[%s] , Name[%s] , Symbol[%s]", m.Address.Hex(), Name, Symbol)
 
 					// 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef  Event Transfer
 					kip17Transfer, err := instance.ParseTransfer(*m)
