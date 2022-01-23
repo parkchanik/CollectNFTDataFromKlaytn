@@ -1,23 +1,27 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"log"
 	"math/big"
-
 	"runtime"
+	"strconv"
+	"time"
 
 	"CollectNFTDataKlaytn/config"
 	"CollectNFTDataKlaytn/kas"
+	. "CollectNFTDataKlaytn/types"
 
 	//"CollectNFTDataKlaytn/parse"
 
-	//kip17 "CollectNFTDataKlaytn/contract/KIP17"
+	kip17 "CollectNFTDataKlaytn/contract/KIP17"
 	kip7 "CollectNFTDataKlaytn/contract/KIP7"
 
 	"github.com/klaytn/klaytn"
+	"github.com/klaytn/klaytn/accounts/abi/bind"
 	klayClient "github.com/klaytn/klaytn/client"
 
 	"github.com/klaytn/klaytn/common"
@@ -77,17 +81,39 @@ func main() {
 	// block number 71291139 (Oct 01, 2021 00:00:00 / UTC+9)
 	// block number 71291138 (Sep 30, 2021 23:59:59 / UTC+9)
 
-	var fromBlockNumber int64 = 80520310 //13717846
-	var toBlockNumber int64 = 80520318
+	var fromBlockNumber int64 = 71291139 // 80520318 // 71291139
+	var toBlockNumber int64 = 73967409   // 80520318   // 71299139
 
 	if *fromNum != 0 {
 		fromBlockNumber = *fromNum
 		toBlockNumber = *toNum
 	}
 
+	logger.InfoLog("-----Start fromBlockNumber :  %d , toBlockNumber : %d", fromBlockNumber, toBlockNumber)
+
+	for fromBlockNumber < toBlockNumber {
+
+		divideToBlockNumber := fromBlockNumber + 1000
+		CollectTrxProcess(fromBlockNumber, divideToBlockNumber)
+		fromBlockNumber = divideToBlockNumber + 1
+
+	}
+
+}
+
+func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
+
+	var minKlayValue int = 90000000000 // 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
+	//2149000000000000000000
+	//100000000000000000000
+
 	address := "0xfd844c2fca5e595004b17615f891620d1cb9bbb2"
 
 	wklayContractAddress := common.HexToAddress(address)
+
+	transferHash := common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef") // transfer topic[0]
+
+	logger.InfoLog("-----Start CollectTrxProcess filterQuery fromBlockNumber[%d] , toBlockNumber[%d]", fromBlockNumber, toBlockNumber)
 
 	query := klaytn.FilterQuery{
 		FromBlock: big.NewInt(fromBlockNumber),
@@ -95,161 +121,189 @@ func main() {
 		Addresses: []common.Address{
 			wklayContractAddress,
 		},
+		Topics: [][]common.Hash{
+			{transferHash},
+		},
 	}
-	// query := ethereum.FilterQuery{
-	// 	FromBlock: big.NewInt(2394201),
-	// 	ToBlock:   big.NewInt(2394201),
-	// 	Addresses: []common.Address{
-	// 	  contractAddress,
-	// 	},
-	//   }
 
 	logs, err := klaytndial.FilterLogs(context.Background(), query)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, m := range logs {
-		logger.InfoLog("------Event Log Tx[%s] , ContractAddr[%s]\n", m.TxHash.Hex(), m.Address.Hex())
+	//fmt.Println("FilterLogs Count : ", len(logs))
 
-		// klay := m.Topics[3].Big()
+	for _, m := range logs { // address wklay log
 
-		// fmt.Println("klay.Int64()", klay.Int64())
-		// logger.InfoLog("----Log Topicvalue[%d]\n", klay.Int64())
+		if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //wklay contract의 transfer
+			//	logger.InfoLog("------Event Log Tx[%s] , ContractAddr[%s]\n", m.TxHash.Hex(), m.Address.Hex())
 
-		instance, err := kip7.NewKip7(m.Address, klaytndial)
-		if err != nil {
-			logger.InfoLog("----Error NewKip7 num[%d] Error[%s]\n", k, err.Error())
-			continue
+			// klay := m.Topics[3].Big()
+
+			// fmt.Println("klay.Int64()", klay.Int64())
+			// logger.InfoLog("----Log Topicvalue[%d]\n", klay.Int64())
+
+			instance, err := kip7.NewKip7(m.Address, klaytndial)
+			if err != nil {
+				logger.InfoLog("----Error NewKip7 Error[%s]\n", err.Error())
+				continue
+			}
+
+			kip7Transfer, err := instance.ParseTransfer(m)
+			if err != nil {
+				logger.InfoLog("----Error NewKip7  Error[%s]\n", err.Error())
+				continue
+			}
+
+			wKlayString := kip7Transfer.Value.String()
+
+			if len(wKlayString) < 12 {
+				continue
+			}
+			wklayint := ChangeWklayValue(wKlayString)
+
+			//   1000000000000000000 이게 1 klay
+			//2149000000000000000000
+
+			//var tokenid int64 = 0
+			if wklayint >= minKlayValue {
+				// 특정 klay 이상 value 만 체크
+
+				blocknum := m.BlockNumber
+				blocknumNew := big.NewInt(int64(blocknum))
+				txhash := m.TxHash
+
+				wklayLast := fmt.Sprintf("%f", float64(wklayint)/100000000)
+
+				block, err := klaytndial.BlockByNumber(context.Background(), blocknumNew)
+				if err != nil {
+					logger.InfoLog("----Error BlockByNumber num[%d] Error[%s]\n", blocknumNew.Int64(), err.Error())
+				}
+
+				blocktime := block.Time().Int64()
+				blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+
+				// 해당 트랜잭션의 영수증
+				rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
+				if err != nil {
+					logger.InfoLog("!!!!!!!!!!!!!!!!!!!!!!!!!!TransactionReceiptt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
+					continue
+				}
+
+				//var cName string = ""
+				//var cSymbol string = ""
+				for _, b := range rept.Logs {
+
+					if b.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //nft contract 의 transfer
+						//3번째 로그의 transfer(첫 transfer event) 가 KIP17 CONTRACT 의 event log 다
+						kip17instance, err := kip17.NewKip17(b.Address, klaytndial)
+						if err != nil {
+							logger.InfoLog("----Error NewKip17 Error[%s]\n", err.Error())
+							continue
+						}
+
+						name, err := kip17instance.Name(&bind.CallOpts{})
+						if err != nil {
+							logger.InfoLog("----Error kip17instance Name Error[%s]\n", err.Error())
+						}
+
+						symbol, err := kip17instance.Symbol(&bind.CallOpts{})
+						if err != nil {
+							logger.InfoLog("----Error kip17instance Symbol Error[%s]\n", err.Error())
+						}
+
+						kip17transfer, err := kip17instance.ParseTransfer(*b)
+						if err != nil {
+							///logger.InfoLog("----Error kip17instance ParseTransfer Maybe Not Kip17 Error[%s]\n", err.Error())
+							continue
+						}
+
+						cName := name
+						cSymbol := symbol
+						tokenID := kip17transfer.TokenId.Int64()
+						cAddress := b.Address
+
+						tokeninfo := &TokenInfo{}
+
+						tokeninfo.BlockTime = blocktimestring
+						tokeninfo.TransactionHash = txhash
+						tokeninfo.ContractName = cName
+						tokeninfo.Contractaddress = cAddress
+
+						tokenIDStr := fmt.Sprintf("%d", tokenID)
+						tokeninfo.KlayValue = wklayLast
+						tokeninfo.Symbol = cSymbol
+
+						tokeninfo.TokenID = tokenIDStr
+
+						PrintTokenData(tokeninfo)
+
+						//logger.InfoLog("--Blocknum[%d] , BlockTime[%s] txHash[%s] , wklayLast[%s] , ContractAddress[%s] , ContractName[%s] , ContractSymbol[%s], TokenID[%d] \n", blocknum, blocktimestring, txhash.Hex(), wklayLast, cAddress.Hex(), cName, cSymbol, tokenID)
+
+					}
+					//logger.InfoLog("----Log num[%d] , b.Topics[0][%s] \n", a, b.Topics[0].Hex())
+
+				}
+
+			}
 		}
-
-		kip7Transfer, err := instance.ParseTransfer(m)
-		if err != nil {
-			logger.InfoLog("----Error NewKip7 num[%d] Error[%s]\n", k, err.Error())
-			continue
-		}
-
-		klay := kip7Transfer.Value
-		//1000000000000000000 이게 1 klay
-
-		logger.InfoLog("----Log Topic num[%d] Value[%d]\n", k, klay)
 
 	}
+}
 
-	//i := fromBlockNumber
+func ChangeWklayValue(ValueString string) int {
 
-	// for i <= toBlockNumber {
+	wKlayString := ValueString
 
-	// 	logger.InfoLog("----- Block Num :  %d , Time : %s", i, time.Now())
+	//logger.InfoLog("----wKlayString[%s]\n", wKlayString)
 
-	// 	blockNum := big.NewInt(i)
+	wKlayrune := []rune(wKlayString)
 
-	// 	block, err := klaytndial.BlockByNumber(context.Background(), blockNum)
-	// 	if err != nil {
-	// 		log.Fatal("BlockByNumber : ", err)
-	// 	}
+	//logger.InfoLog("----wKlayrune[%s]\n", wKlayrune)
+	rune10length := len(wKlayrune) - 10 // 전체 길이에서 10을 뺀다
+	//logger.InfoLog("----rune10length[%d]\n", rune10length)
 
-	// 	blocktime := block.Time().Int64()
-	// 	blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
-	// 	fmt.Printf("blockdata time : %s\n", blocktimestring)
+	wklayMinimal := string(wKlayrune[:rune10length])
 
-	// for _, txs := range block.Transactions() {
+	//logger.InfoLog("----wklayMinimal[%s]\n", wklayMinimal)
 
-	// 	klayint64 := txs.Value().Int64()
+	wklayint, err := strconv.Atoi(wklayMinimal)
+	if err != nil {
+		return -1
+	}
 
-	// 	// if klayint64 < minKlayValue {
-	// 	// 	continue
-	// 	// }
+	return wklayint
 
-	// 	txhash := txs.Hash()
+}
 
-	// 	if txhash.Hex() != "0x5cf031ef3e2422b936323fd71772452adbbad540358081b2b636dce6f5e118f0" {
-	// 		continue
-	// 	}
+func PrintTokenData(logdata *TokenInfo) {
 
-	// 	klaystring := fmt.Sprintf("%f", float64(klayint64)/1000000000000000000)
+	transaction := logdata.TransactionHash.Hex()
+	blockTime := logdata.BlockTime[:10]
+	contractAddress := logdata.Contractaddress.Hex()
+	contractName := logdata.ContractName
+	contractSymbol := logdata.Symbol
+	tokenID := logdata.TokenID
+	klayValue := logdata.KlayValue //float64
 
-	// 	logger.InfoLog("------ start parse Transaction TxHash[%s] Klay[%s]\n", txhash.Hex(), klaystring)
+	var b bytes.Buffer
 
-	// 	// 해당 트랜잭션의 영수증
-	// 	rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
-	// 	if err != nil {
-	// 		logger.InfoLog("--ransactionReceipt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
-	// 		continue
-	// 	}
+	b.WriteString(blockTime)
+	b.WriteString(",")
+	b.WriteString(transaction)
+	b.WriteString(",")
+	b.WriteString(contractAddress)
+	b.WriteString(",")
+	b.WriteString(contractName)
+	b.WriteString(",")
+	b.WriteString(contractSymbol)
+	b.WriteString(",")
+	b.WriteString(tokenID)
+	b.WriteString(",")
+	b.WriteString(klayValue)
 
-	// 	if len(rept.Logs) == 0 { //event log 가없으면 일반 거래일것이다
-	// 		continue
-	// 	}
+	logger.TokenLog(b.String())
 
-	// 	for _, m := range rept.Logs {
-
-	// 		//0번쨰는 opensea Contract 인것 같다
-	// 		//1번쨰도 opensea Contract 인것 같다
-	// 		//2번째는 해당 NFT contract  TRANSFER KIP17
-	// 		//3번째는 WKLAY 거래 총 비용 TRANFER KIP7
-	// 		//4번쨰 부터 수수료 개념 TRANFSER
-	// 		contractAddr := m.Address.Hex()
-	// 		logger.InfoLog("--ContractAddr ContractAddr[%s] , m.Topics[0][%s] \n", contractAddr, m.Topics[0].Hex())
-
-	// 		instance, err := kip17.NewKip17(m.Address, klaytndial)
-	// 		if err != nil {
-	// 			logger.InfoLog("------- NewKip17 contractAddressHex[%s] , error[%s] ", m.Address.Hex(), err.Error())
-	// 			return
-	// 		}
-
-	// 		if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" {
-
-	// 			Name, err := instance.Name(&bind.CallOpts{})
-	// 			if err != nil {
-	// 				logger.InfoLog("GetDataERC721 instance.Name error[%s] ", err.Error())
-
-	// 			}
-
-	// 			Symbol, err := instance.Symbol(&bind.CallOpts{})
-	// 			if err != nil {
-	// 				logger.InfoLog("GetDataERC721 instance.Symbol error[%s] ", err.Error())
-
-	// 			}
-
-	// 			logger.InfoLog("------- NewKip17 contractAddressHex[%s] , Name[%s] , Symbol[%s]", m.Address.Hex(), Name, Symbol)
-
-	// 			// 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef  Event Transfer
-	// 			kip17Transfer, err := instance.ParseTransfer(*m)
-	// 			if err != nil {
-	// 				logger.InfoLog("GetDataERC721 instance.ParseTransfer  error[%s] ", err.Error())
-	// 				//return
-	// 			}
-
-	// 			//TokenID = fmt.Sprintf("%s", kip17Transfer.TokenId)
-	// 			if err == nil {
-	// 				logger.InfoLog("Get KIP17 Transfer  From[%s] , To[%s]  , TokenID[%d]", kip17Transfer.From.Hex(), kip17Transfer.To.Hex(), kip17Transfer.TokenId.Int64())
-	// 			}
-
-	// 			kip7instance, err := kip7.NewKip7(m.Address, klaytndial)
-	// 			if err != nil {
-	// 				logger.InfoLog("------- New kip7 contractAddressHex[%s] , error[%s] ", m.Address.Hex(), err.Error())
-	// 				//return
-	// 			}
-
-	// 			kip7Transfer, err := kip7instance.ParseTransfer(*m)
-	// 			if err != nil {
-	// 				logger.InfoLog("GetDataERC721 instance.ParseTransfer  error[%s] ", err.Error())
-	// 				//return
-	// 			}
-
-	// 			if err == nil {
-	// 				logger.InfoLog("Get KIP7 Transfer  From[%s] , To[%s]  , Value[%s]", kip7Transfer.From.Hex(), kip7Transfer.To.Hex(), kip7Transfer.Value.String())
-	// 			}
-
-	// 		}
-
-	// 	}
-
-	// }
-
-	//	i = i + 1
-	//}
 }
 
 // WKLAY CONTRACT ADDRESS
@@ -263,3 +317,118 @@ func main() {
 //KLAY 치킨
 //https://opensea.io/assets/klaytn/0x6b8f71aa8d5817d94056103886a1f07d12e78ce5/6142
 //https://scope.klaytn.com/tx/0xe59be99f7540f24c0ef932a7f52ca718287023e3060a1c15b52bb20b68f802a7?tabId=eventLog
+
+//i := fromBlockNumber
+
+// for i <= toBlockNumber {
+
+// 	logger.InfoLog("----- Block Num :  %d , Time : %s", i, time.Now())
+
+// 	blockNum := big.NewInt(i)
+
+// 	block, err := klaytndial.BlockByNumber(context.Background(), blockNum)
+// 	if err != nil {
+// 		log.Fatal("BlockByNumber : ", err)
+// 	}
+
+// 	blocktime := block.Time().Int64()
+// 	blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+// 	fmt.Printf("blockdata time : %s\n", blocktimestring)
+
+// for _, txs := range block.Transactions() {
+
+// 	klayint64 := txs.Value().Int64()
+
+// 	// if klayint64 < minKlayValue {
+// 	// 	continue
+// 	// }
+
+// 	txhash := txs.Hash()
+
+// 	if txhash.Hex() != "0x5cf031ef3e2422b936323fd71772452adbbad540358081b2b636dce6f5e118f0" {
+// 		continue
+// 	}
+
+// 	klaystring := fmt.Sprintf("%f", float64(klayint64)/1000000000000000000)
+
+// 	logger.InfoLog("------ start parse Transaction TxHash[%s] Klay[%s]\n", txhash.Hex(), klaystring)
+
+// 	// 해당 트랜잭션의 영수증
+// 	rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
+// 	if err != nil {
+// 		logger.InfoLog("--ransactionReceipt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
+// 		continue
+// 	}
+
+// 	if len(rept.Logs) == 0 { //event log 가없으면 일반 거래일것이다
+// 		continue
+// 	}
+
+// 	for _, m := range rept.Logs {
+
+// 		//0번쨰는 opensea Contract 인것 같다
+// 		//1번쨰도 opensea Contract 인것 같다
+// 		//2번째는 해당 NFT contract  TRANSFER KIP17
+// 		//3번째는 WKLAY 거래 총 비용 TRANFER KIP7
+// 		//4번쨰 부터 수수료 개념 TRANFSER
+// 		contractAddr := m.Address.Hex()
+// 		logger.InfoLog("--ContractAddr ContractAddr[%s] , m.Topics[0][%s] \n", contractAddr, m.Topics[0].Hex())
+
+// 		instance, err := kip17.NewKip17(m.Address, klaytndial)
+// 		if err != nil {
+// 			logger.InfoLog("------- NewKip17 contractAddressHex[%s] , error[%s] ", m.Address.Hex(), err.Error())
+// 			return
+// 		}
+
+// 		if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" {
+
+// 			Name, err := instance.Name(&bind.CallOpts{})
+// 			if err != nil {
+// 				logger.InfoLog("GetDataERC721 instance.Name error[%s] ", err.Error())
+
+// 			}
+
+// 			Symbol, err := instance.Symbol(&bind.CallOpts{})
+// 			if err != nil {
+// 				logger.InfoLog("GetDataERC721 instance.Symbol error[%s] ", err.Error())
+
+// 			}
+
+// 			logger.InfoLog("------- NewKip17 contractAddressHex[%s] , Name[%s] , Symbol[%s]", m.Address.Hex(), Name, Symbol)
+
+// 			// 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef  Event Transfer
+// 			kip17Transfer, err := instance.ParseTransfer(*m)
+// 			if err != nil {
+// 				logger.InfoLog("GetDataERC721 instance.ParseTransfer  error[%s] ", err.Error())
+// 				//return
+// 			}
+
+// 			//TokenID = fmt.Sprintf("%s", kip17Transfer.TokenId)
+// 			if err == nil {
+// 				logger.InfoLog("Get KIP17 Transfer  From[%s] , To[%s]  , TokenID[%d]", kip17Transfer.From.Hex(), kip17Transfer.To.Hex(), kip17Transfer.TokenId.Int64())
+// 			}
+
+// 			kip7instance, err := kip7.NewKip7(m.Address, klaytndial)
+// 			if err != nil {
+// 				logger.InfoLog("------- New kip7 contractAddressHex[%s] , error[%s] ", m.Address.Hex(), err.Error())
+// 				//return
+// 			}
+
+// 			kip7Transfer, err := kip7instance.ParseTransfer(*m)
+// 			if err != nil {
+// 				logger.InfoLog("GetDataERC721 instance.ParseTransfer  error[%s] ", err.Error())
+// 				//return
+// 			}
+
+// 			if err == nil {
+// 				logger.InfoLog("Get KIP7 Transfer  From[%s] , To[%s]  , Value[%s]", kip7Transfer.From.Hex(), kip7Transfer.To.Hex(), kip7Transfer.Value.String())
+// 			}
+
+// 		}
+
+// 	}
+
+// }
+
+//	i = i + 1
+//}
