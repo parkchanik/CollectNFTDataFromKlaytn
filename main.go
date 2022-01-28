@@ -135,6 +135,7 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 
 	for _, m := range logs { // address wklay log
 
+		//0xfd844c2fca5e595004b17615f891620d1cb9bbb2 wklay address
 		if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //wklay contract의 transfer
 			//	logger.InfoLog("------Event Log Tx[%s] , ContractAddr[%s]\n", m.TxHash.Hex(), m.Address.Hex())
 
@@ -143,11 +144,29 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 			// fmt.Println("klay.Int64()", klay.Int64())
 			// logger.InfoLog("----Log Topicvalue[%d]\n", klay.Int64())
 
-			instance, err := kip7.NewKip7(m.Address, klaytndial)
+			wrapTokenAddress := m.Address // wklay 혹은 다른 token
+
+			instance, err := kip7.NewKip7(wrapTokenAddress, klaytndial)
 			if err != nil {
-				logger.InfoLog("----Error NewKip7 Error[%s]\n", err.Error())
+				logger.InfoLog("----Error NewKip7 TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
 				continue
 			}
+
+			name, err := instance.Name(&bind.CallOpts{})
+			if err != nil {
+				logger.InfoLog("----Error Name TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
+
+			}
+
+			wrapTokenName := name
+
+			symbol, err := instance.Symbol(&bind.CallOpts{})
+			if err != nil {
+				logger.InfoLog("----Error Symbol TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
+
+			}
+
+			wrapTokenSymbol := symbol
 
 			kip7Transfer, err := instance.ParseTransfer(m)
 			if err != nil {
@@ -229,12 +248,15 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 						tokeninfo.TransactionHash = txhash
 						tokeninfo.ContractName = cName
 						tokeninfo.Contractaddress = cAddress
+						tokeninfo.ContractSymbol = cSymbol
 
 						tokenIDStr := fmt.Sprintf("%d", tokenID)
-						tokeninfo.KlayValue = wklayLast
-						tokeninfo.Symbol = cSymbol
-
 						tokeninfo.TokenID = tokenIDStr
+
+						tokeninfo.WrapTokenAddress = wrapTokenAddress
+						tokeninfo.WrapTokenName = wrapTokenName
+						tokeninfo.WrapTokenSymbol = wrapTokenSymbol
+						tokeninfo.KlayValue = wklayLast
 
 						PrintTokenData(tokeninfo)
 
@@ -282,8 +304,12 @@ func PrintTokenData(logdata *TokenInfo) {
 	blockTime := logdata.BlockTime[:10]
 	contractAddress := logdata.Contractaddress.Hex()
 	contractName := logdata.ContractName
-	contractSymbol := logdata.Symbol
+	contractSymbol := logdata.ContractSymbol
 	tokenID := logdata.TokenID
+
+	wrapTokenAddress := logdata.WrapTokenAddress.Hex()
+	wrapTokenName := logdata.WrapTokenName
+	wrapTokenSymbol := logdata.WrapTokenSymbol
 	klayValue := logdata.KlayValue //float64
 
 	var b bytes.Buffer
@@ -299,6 +325,13 @@ func PrintTokenData(logdata *TokenInfo) {
 	b.WriteString(contractSymbol)
 	b.WriteString(",")
 	b.WriteString(tokenID)
+	b.WriteString(",")
+
+	b.WriteString(wrapTokenAddress)
+	b.WriteString(",")
+	b.WriteString(wrapTokenName)
+	b.WriteString(",")
+	b.WriteString(wrapTokenSymbol)
 	b.WriteString(",")
 	b.WriteString(klayValue)
 

@@ -7,13 +7,16 @@ import (
 )
 
 type TokenInfo struct {
-	TransactionHash common.Hash
-	BlockTime       string
-	Contractaddress common.Address
-	ContractName    string
-	Symbol          string
-	TokenID         string
-	KlayValue       string
+	TransactionHash  common.Hash
+	BlockTime        string
+	Contractaddress  common.Address
+	ContractName     string
+	ContractSymbol   string
+	TokenID          string
+	WrapTokenAddress common.Address
+	WrapTokenName    string
+	WrapTokenSymbol  string
+	KlayValue        string
 }
 
 // type LogData struct {
