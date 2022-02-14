@@ -73,6 +73,11 @@ func main() {
 	}
 	fmt.Println("ChainID : ", chainId.Int64())
 
+	latestBlockNum, err := klaytndial.BlockNumber(context.Background())
+	if err != nil {
+		log.Fatal("Lastest Block Num : %s : ", latestBlockNum.String())
+	}
+
 	// klaytn block list
 	// klaytn lastest block num 80292389
 
@@ -80,6 +85,10 @@ func main() {
 	// block number 73967409 (Oct 31, 2021 23:59:59 / UTC+9)
 	// block number 71291139 (Oct 01, 2021 00:00:00 / UTC+9)
 	// block number 71291138 (Sep 30, 2021 23:59:59 / UTC+9)
+
+	// block number 66021022 (Aug 01, 2021 00:00:00 / UTC+9)
+
+	logger.InfoLog("-----Check Lastest Block Num :  %d ", latestBlockNum.Int64())
 
 	var fromBlockNumber int64 = 71291139 // 80520318 // 71291139
 	var toBlockNumber int64 = 73967409   // 80520318   // 71299139
@@ -103,7 +112,7 @@ func main() {
 
 func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 
-	var minKlayValue int = 90000000000 // 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
+	var minKlayValue int = 100000000 // 500000000 5 klay , 1000000000 10 klay 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
 	//2149000000000000000000
 	//100000000000000000000
 
