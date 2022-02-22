@@ -1,8 +1,6 @@
 package types
 
 import (
-	//"math/big"
-
 	"github.com/klaytn/klaytn/common"
 )
 
@@ -18,10 +16,3 @@ type TokenInfo struct {
 	WrapTokenSymbol  string
 	KlayValue        string
 }
-
-// type LogData struct {
-// 	TransactionHash       common.Hash
-// 	EtherValue            int64
-// 	MatchContractsAddress common.Address
-// 	TokenInfos            []TokenInfo
-// }
