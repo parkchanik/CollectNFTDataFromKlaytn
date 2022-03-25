@@ -35,6 +35,14 @@ var klaytndial *klayClient.Client = nil
 
 var IMAGE_PATH string = "../CollectNFT/ImagesKlaytn/"
 
+type Info struct {
+	BlockNumber      uint64
+	WrapTokenName    string
+	WrapTokenSymbol  string
+	WrapTokenAddress common.Address
+	Klay             int
+}
+
 func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -112,7 +120,7 @@ func main() {
 
 func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 
-	var minKlayValue int = 100000000 // 500000000 5 klay , 1000000000 10 klay 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
+	var minKlayValue int = 10000000 // 500000000 5 klay , 1000000000 10 klay 100 klay 100000000000000000000 인데 0 10개 뺀다 10000000000 , 100000000000 1000klay
 	//2149000000000000000000
 	//100000000000000000000
 
@@ -140,160 +148,183 @@ func CollectTrxProcess(fromBlockNumber, toBlockNumber int64) {
 		log.Fatal(err)
 	}
 
+	TxHashInfo := make(map[common.Hash]*Info, 0)
+
 	//fmt.Println("FilterLogs Count : ", len(logs))
 
 	for _, m := range logs { // address wklay log
 
+		mtxhash := m.TxHash
+
+		logger.InfoLog("-----FilterLogs :TxHash[%s] , m.Topics[0].Hex()[%s] , m.Address[%s]", mtxhash.Hex(), m.Topics[0].Hex(), m.Address.Hex())
 		//0xfd844c2fca5e595004b17615f891620d1cb9bbb2 wklay address
-		if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //wklay contract의 transfer
-			//	logger.InfoLog("------Event Log Tx[%s] , ContractAddr[%s]\n", m.TxHash.Hex(), m.Address.Hex())
+		//if m.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //wklay contract의 transfer
+		//	logger.InfoLog("------Event Log Tx[%s] , ContractAddr[%s]\n", m.TxHash.Hex(), m.Address.Hex())
 
-			// klay := m.Topics[3].Big()
+		// klay := m.Topics[3].Big()
 
-			// fmt.Println("klay.Int64()", klay.Int64())
-			// logger.InfoLog("----Log Topicvalue[%d]\n", klay.Int64())
+		// fmt.Println("klay.Int64()", klay.Int64())
+		// logger.InfoLog("----Log Topicvalue[%d]\n", klay.Int64())
 
-			wrapTokenAddress := m.Address // wklay 혹은 다른 token
+		wrapTokenAddress := m.Address // wklay 혹은 다른 token
 
-			instance, err := kip7.NewKip7(wrapTokenAddress, klaytndial)
-			if err != nil {
-				logger.InfoLog("----Error NewKip7 TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
-				continue
-			}
+		instance, err := kip7.NewKip7(wrapTokenAddress, klaytndial)
+		if err != nil {
+			logger.InfoLog("----Error NewKip7 TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
+			continue
+		}
 
-			name, err := instance.Name(&bind.CallOpts{})
-			if err != nil {
-				logger.InfoLog("----Error Name TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
+		wrapTokenName, err := instance.Name(&bind.CallOpts{})
+		if err != nil {
+			logger.InfoLog("----Error Name TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
 
-			}
+		}
 
-			wrapTokenName := name
+		wrapTokenSymbol, err := instance.Symbol(&bind.CallOpts{})
+		if err != nil {
+			logger.InfoLog("----Error Symbol TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
 
-			symbol, err := instance.Symbol(&bind.CallOpts{})
-			if err != nil {
-				logger.InfoLog("----Error Symbol TxHash[%s] Error[%s]\n", m.TxHash.Hex(), err.Error())
+		}
 
-			}
+		kip7Transfer, err := instance.ParseTransfer(m)
+		if err != nil {
+			logger.InfoLog("----Error NewKip7  Error[%s]\n", err.Error())
+			continue
+		}
 
-			wrapTokenSymbol := symbol
+		wKlayString := kip7Transfer.Value.String()
 
-			kip7Transfer, err := instance.ParseTransfer(m)
-			if err != nil {
-				logger.InfoLog("----Error NewKip7  Error[%s]\n", err.Error())
-				continue
-			}
+		if len(wKlayString) < 12 {
+			continue
+		}
+		wklayint := ChangeWklayValue(wKlayString)
 
-			wKlayString := kip7Transfer.Value.String()
+		//logger.InfoLog("-----FilterLogs :wrapTokenName[%s] , symbol[%s] , wklayint[%d]", wrapTokenName, wrapTokenSymbol, wklayint)
 
-			if len(wKlayString) < 12 {
-				continue
-			}
-			wklayint := ChangeWklayValue(wKlayString)
+		//   1000000000000000000 이게 1 klay
+		//2149000000000000000000
 
-			//   1000000000000000000 이게 1 klay
-			//2149000000000000000000
+		//var tokenid int64 = 0
+		if wklayint >= minKlayValue {
+			// 특정 klay 이상 value 만 체크
+			txhashinfo, ex := TxHashInfo[mtxhash]
+			if !ex {
+				info := &Info{}
+				info.BlockNumber = m.BlockNumber
+				info.Klay = wklayint
+				info.WrapTokenName = wrapTokenName
+				info.WrapTokenSymbol = wrapTokenSymbol
+				info.WrapTokenAddress = wrapTokenAddress
 
-			//var tokenid int64 = 0
-			if wklayint >= minKlayValue {
-				// 특정 klay 이상 value 만 체크
+				TxHashInfo[mtxhash] = info
+			} else {
 
-				blocknum := m.BlockNumber
-				blocknumNew := big.NewInt(int64(blocknum))
-				txhash := m.TxHash
-
-				wklayLast := fmt.Sprintf("%f", float64(wklayint)/100000000)
-
-				block, err := klaytndial.BlockByNumber(context.Background(), blocknumNew)
-				if err != nil {
-					logger.InfoLog("----Error BlockByNumber num[%d] Error[%s]\n", blocknumNew.Int64(), err.Error())
+				if txhashinfo.Klay < wklayint { // 등록 되어있는 klay 가 작으면 새로 수정
+					txhashinfo.Klay = wklayint
 				}
+			}
 
-				blocktime := block.Time().Int64()
-				blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+		}
 
-				// 해당 트랜잭션의 영수증
-				rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
+	} // for
+
+	for txHash, info := range TxHashInfo {
+
+		fmt.Printf("TxHashInfo : k[%s] blockNumber[%d] Klay[%d]\n", txHash.Hex(), info.BlockNumber, info.Klay)
+
+		blocknum := info.BlockNumber
+		blocknumNew := big.NewInt(int64(blocknum))
+		txhash := txHash
+
+		wklayint := info.Klay
+		wklayLast := fmt.Sprintf("%f", float64(wklayint)/100000000)
+
+		block, err := klaytndial.BlockByNumber(context.Background(), blocknumNew)
+		if err != nil {
+			logger.InfoLog("----Error BlockByNumber num[%d] Error[%s]\n", blocknumNew.Int64(), err.Error())
+		}
+
+		blocktime := block.Time().Int64()
+		blocktimestring := time.Unix(blocktime, 0).Format("2006-01-02 15:04:05")
+
+		// 해당 트랜잭션의 영수증
+		rept, err := klaytndial.TransactionReceipt(context.Background(), txhash)
+		if err != nil {
+			logger.InfoLog("!!!!!!!!!!!!!!!!!!!!!!!!!!TransactionReceiptt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
+			continue
+		}
+
+		//var cName string = ""
+		//var cSymbol string = ""
+
+		for _, log := range rept.Logs {
+
+			//logger.InfoLog("-----rept.Logs :TxHash[%s] , m.Topics[0].Hex()[%s] , m.Address[%s]", txHash.Hex(), log.Topics[0].Hex(), log.Address.Hex())
+
+			if log.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //nft contract 의 transfer
+				//3번째 로그의 transfer(첫 transfer event) 가 KIP17 CONTRACT 의 event log 다
+				kip17instance, err := kip17.NewKip17(log.Address, klaytndial)
 				if err != nil {
-					logger.InfoLog("!!!!!!!!!!!!!!!!!!!!!!!!!!TransactionReceiptt Error vLog.TxHash[%s] , err[%s]\n", txhash, err.Error())
+					logger.InfoLog("----Error NewKip17 Error[%s]\n", err.Error())
 					continue
 				}
 
-				//var cName string = ""
-				//var cSymbol string = ""
-				for _, b := range rept.Logs {
-
-					if b.Topics[0].Hex() == "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" { //nft contract 의 transfer
-						//3번째 로그의 transfer(첫 transfer event) 가 KIP17 CONTRACT 의 event log 다
-						kip17instance, err := kip17.NewKip17(b.Address, klaytndial)
-						if err != nil {
-							logger.InfoLog("----Error NewKip17 Error[%s]\n", err.Error())
-							continue
-						}
-
-						name, err := kip17instance.Name(&bind.CallOpts{})
-						if err != nil {
-							logger.InfoLog("----Error kip17instance Name Error[%s]\n", err.Error())
-						}
-
-						symbol, err := kip17instance.Symbol(&bind.CallOpts{})
-						if err != nil {
-							logger.InfoLog("----Error kip17instance Symbol Error[%s]\n", err.Error())
-						}
-
-						kip17transfer, err := kip17instance.ParseTransfer(*b)
-						if err != nil {
-							///logger.InfoLog("----Error kip17instance ParseTransfer Maybe Not Kip17 Error[%s]\n", err.Error())
-							continue
-						}
-
-						cName := name
-						cSymbol := symbol
-						tokenID := kip17transfer.TokenId.Int64()
-						cAddress := b.Address
-
-						tokeninfo := &TokenInfo{}
-
-						tokeninfo.BlockTime = blocktimestring
-						tokeninfo.TransactionHash = txhash
-						tokeninfo.ContractName = cName
-						tokeninfo.Contractaddress = cAddress
-						tokeninfo.ContractSymbol = cSymbol
-
-						tokenIDStr := fmt.Sprintf("%d", tokenID)
-						tokeninfo.TokenID = tokenIDStr
-
-						tokeninfo.WrapTokenAddress = wrapTokenAddress
-						tokeninfo.WrapTokenName = wrapTokenName
-						tokeninfo.WrapTokenSymbol = wrapTokenSymbol
-						tokeninfo.KlayValue = wklayLast
-
-						PrintTokenData(tokeninfo)
-
-					}
-
+				kip17transfer, err := kip17instance.ParseTransfer(*log) // 이 로그 parse 가 에러 나면 kip17 이 아니다
+				if err != nil {
+					///logger.InfoLog("----Error kip17instance ParseTransfer Maybe Not Kip17 Error[%s]\n", err.Error())
+					continue
 				}
 
+				name, err := kip17instance.Name(&bind.CallOpts{})
+				if err != nil {
+					logger.InfoLog("----Error kip17instance Name Error[%s]\n", err.Error())
+				}
+
+				symbol, err := kip17instance.Symbol(&bind.CallOpts{})
+				if err != nil {
+					logger.InfoLog("----Error kip17instance Symbol Error[%s]\n", err.Error())
+				}
+
+				cName := name
+				cSymbol := symbol
+				tokenID := kip17transfer.TokenId.Int64()
+				cAddress := log.Address
+
+				tokeninfo := &TokenInfo{}
+
+				tokeninfo.BlockTime = blocktimestring
+				tokeninfo.TransactionHash = txhash
+				tokeninfo.ContractName = cName
+				tokeninfo.Contractaddress = cAddress
+				tokeninfo.ContractSymbol = cSymbol
+
+				tokenIDStr := fmt.Sprintf("%d", tokenID)
+				tokeninfo.TokenID = tokenIDStr
+
+				tokeninfo.WrapTokenAddress = info.WrapTokenAddress
+				tokeninfo.WrapTokenName = info.WrapTokenName
+				tokeninfo.WrapTokenSymbol = info.WrapTokenSymbol
+				tokeninfo.KlayValue = wklayLast
+
+				PrintTokenData(tokeninfo)
+
 			}
+
 		}
 
 	}
+
 }
 
 func ChangeWklayValue(ValueString string) int {
 
 	wKlayString := ValueString
 
-	//logger.InfoLog("----wKlayString[%s]\n", wKlayString)
-
 	wKlayrune := []rune(wKlayString)
 
-	//logger.InfoLog("----wKlayrune[%s]\n", wKlayrune)
 	rune10length := len(wKlayrune) - 10 // 전체 길이에서 10을 뺀다
-	//logger.InfoLog("----rune10length[%d]\n", rune10length)
 
 	wklayMinimal := string(wKlayrune[:rune10length])
-
-	//logger.InfoLog("----wklayMinimal[%s]\n", wklayMinimal)
 
 	wklayint, err := strconv.Atoi(wklayMinimal)
 	if err != nil {
